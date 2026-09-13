@@ -1,0 +1,25 @@
+{
+  "name": "@lexwatt/core",
+  "version": "1.0.0",
+  "description": "LexWatt — estimate model work, meter local package energy, stop the contained workload when its budget is exhausted. Local-first OSS core.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./ts/src/index.ts",
+    "./sdk": "./ts/src/sdk.ts"
+  },
+  "files": [
+    "ts/src"
+  ],
+  "scripts": {
+    "test": "node --test ts/test/",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  }
+}

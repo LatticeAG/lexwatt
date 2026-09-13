@@ -1,0 +1,367 @@
+{
+  "v": 1,
+  "suite": "lexwatt-conformance",
+  "convention": "Whole-string $NAME resolves against the §7.1 fixture table; no interpolation inside other strings.",
+  "vectors": [
+    {
+      "id": "TV-L--01",
+      "name": "Integer identity",
+      "input": {"op": "parse_u", "value": "11440"},
+      "expected": {"value": "11440"}
+    },
+    {
+      "id": "TV-L--02",
+      "name": "Scientific notation denied",
+      "input": {"op": "parse_u", "value": "1e12"},
+      "expected": {"error": "INVALID_INPUT"}
+    },
+    {
+      "id": "TV-L--03",
+      "name": "No hard-deny bypass switch",
+      "input": {"op": "validate_config", "base": "$CFG", "set": {"allow_all": true}},
+      "expected": {"error": "UNKNOWN_FIELD"}
+    },
+    {
+      "id": "TV-L--04",
+      "name": "Exact decimal joules",
+      "input": {"op": "parse_joules", "value": "1.000001"},
+      "expected": {"energy_uj": "1000001"}
+    },
+    {
+      "id": "TV-L--05",
+      "name": "Sub-microjoule value rejected",
+      "input": {"op": "parse_joules", "value": "0.0000001"},
+      "expected": {"error": "INVALID_INPUT"}
+    },
+    {
+      "id": "TV-L--06",
+      "name": "Golden dense estimate",
+      "input": {"op": "estimate", "model": "$M", "work": "$W"},
+      "expected": {"estimator": "dense-v1", "base_flops": "10000", "attention_flops": "400", "charged_flops": "11440", "coverage": "cooperative_estimate"}
+    },
+    {
+      "id": "TV-L--07",
+      "name": "Integer ceiling rather than floor",
+      "input": {"op": "estimate", "parameters": "1", "layers": 1, "hidden": 1, "input_tokens": "1", "max_output_tokens": "0", "batch": 1, "safety_milli": 1001},
+      "expected": {"base_flops": "2", "attention_flops": "0", "charged_flops": "3"}
+    },
+    {
+      "id": "TV-L--08",
+      "name": "Unsupported sparse model",
+      "input": {"op": "estimate", "base_model": "$M", "set": {"kind": "moe-v1"}, "work": "$W"},
+      "expected": {"error": "UNSUPPORTED_MODEL"}
+    },
+    {
+      "id": "TV-L--09",
+      "name": "Exact-fit reservation",
+      "input": {"op": "charge", "used": "0", "cap": "11440", "charge": "11440"},
+      "expected": {"used": "11440", "admitted": true, "events": ["ComputeReserved"]}
+    },
+    {
+      "id": "TV-L--10",
+      "name": "Underreported finish cannot refund",
+      "input": {"op": "finish", "reservation": "$RES", "observed_output_tokens": "1", "model": "$M"},
+      "expected": {"charged_flops": "11440", "observed_flops": "6732", "state": "FINISHED"}
+    },
+    {
+      "id": "TV-L--11",
+      "name": "Over-cap admission hard-stops",
+      "input": {"op": "charge", "used": "11440", "cap": "11440", "charge": "1"},
+      "expected": {"used": "11440", "admitted": false, "error": "FLOPS_CAP", "events": ["RequestDenied", "StopLatched"], "state": "STOPPING"}
+    },
+    {
+      "id": "TV-L--12",
+      "name": "Ordinary RAPL delta",
+      "input": {"op": "rapl_delta", "a": "100", "b": "250", "range": "1000", "dt_us": "100000", "stale_us": "250000", "power_uw": "2000", "margin_uj": "0"},
+      "expected": {"delta_uj": "150"}
+    },
+    {
+      "id": "TV-L--13",
+      "name": "Single wrap",
+      "input": {"op": "rapl_delta", "a": "900", "b": "100", "range": "1000", "dt_us": "100000", "stale_us": "250000", "power_uw": "2000", "margin_uj": "0"},
+      "expected": {"delta_uj": "200"}
+    },
+    {
+      "id": "TV-L--14",
+      "name": "Ambiguous full wrap interval",
+      "input": {"op": "rapl_delta", "a": "100", "b": "200", "range": "1000", "dt_us": "100000", "stale_us": "250000", "power_uw": "10000", "margin_uj": "0"},
+      "expected": {"error": "SENSOR_FAULT", "reason": "WRAP_AMBIGUOUS"}
+    },
+    {
+      "id": "TV-L--15",
+      "name": "Counter out of range",
+      "input": {"op": "rapl_delta", "a": "1000", "b": "1", "range": "1000", "dt_us": "100000", "stale_us": "250000", "power_uw": "2000", "margin_uj": "0"},
+      "expected": {"error": "SENSOR_FAULT", "reason": "COUNTER_RANGE"}
+    },
+    {
+      "id": "TV-L--16",
+      "name": "Implausible reset-like jump",
+      "input": {"op": "rapl_delta", "a": "900", "b": "0", "range": "1000", "dt_us": "1000", "stale_us": "250000", "power_uw": "1000", "margin_uj": "0"},
+      "expected": {"error": "SENSOR_FAULT", "reason": "DELTA_IMPLAUSIBLE"}
+    },
+    {
+      "id": "TV-L--17",
+      "name": "Energy guard equality",
+      "input": {"op": "guard", "energy_uj": "700000", "cap_uj": "1000000", "power_uw": "1000000", "stale_us": "200000", "kill_us": "100000", "margin_uj": "0"},
+      "expected": {"reserve_uj": "300000", "state": "STOPPING", "reason": "ENERGY_GUARD"}
+    },
+    {
+      "id": "TV-L--18",
+      "name": "Suspend produces stale sample",
+      "input": {"op": "rapl_delta", "a": "0", "b": "1", "range": "10000000", "dt_us": "300000", "stale_us": "250000", "power_uw": "1000000", "margin_uj": "0"},
+      "expected": {"error": "SENSOR_FAULT", "reason": "STALE_SAMPLE"}
+    },
+    {
+      "id": "TV-L--19",
+      "name": "Guard below threshold",
+      "input": {"op": "guard", "energy_uj": "699999", "cap_uj": "1000000", "power_uw": "1000000", "stale_us": "200000", "kill_us": "100000", "margin_uj": "0"},
+      "expected": {"reserve_uj": "300000", "state": "RUNNING", "reason": null}
+    },
+    {
+      "id": "TV-L--20",
+      "name": "Nested energy domains rejected",
+      "input": {"op": "topology", "selected": ["package-0", "core-0"], "parents": {"core-0": "package-0"}},
+      "expected": {"error": "INVALID_INPUT", "reason": "OVERLAPPING_DOMAINS"}
+    },
+    {
+      "id": "TV-L--21",
+      "name": "Shared-inclusive attribution",
+      "input": {"op": "attribution", "package_delta_uj": "1000", "runs": ["lwr_000000000000000000001", "lwr_000000000000000000002"], "cpu_shares_milli": [250, 750]},
+      "expected": {"charges_uj": ["1000", "1000"], "summable_as_host_energy": false}
+    },
+    {
+      "id": "TV-L--22",
+      "name": "Missing RAPL cannot fake joules",
+      "input": {"op": "capability", "profile": "linux-rapl-v1", "cgroup_kill": true, "rapl_domains": []},
+      "expected": {"error": "SENSOR_UNAVAILABLE", "workload_exec_count": 0}
+    },
+    {
+      "id": "TV-L--23",
+      "name": "Zero spawn budget",
+      "input": {"op": "token", "state": "RUNNING", "issued": 0, "cap": 0, "action": "$ACT"},
+      "expected": {"error": "SPAWN_CAP", "issued": 0, "events": ["RequestDenied", "StopLatched"], "state": "STOPPING"}
+    },
+    {
+      "id": "TV-L--24",
+      "name": "Expired token slot is not refunded",
+      "input": {"op": "token", "token": "$TOKEN", "now_us": "1000000", "issued": 1, "cap": 1, "operation": "expire"},
+      "expected": {"token_state": "EXPIRED", "issued": 1, "remaining_spawns": 0, "events": ["TokenExpired"]}
+    },
+    {
+      "id": "TV-L--25",
+      "name": "Last valid token microsecond",
+      "input": {"op": "dispatch", "token": "$TOKEN", "channel_id": "$P", "action": "$ACT", "now_us": "999999", "run_state": "RUNNING", "token_state": "ISSUED"},
+      "expected": {"token_state": "SPENT", "action_state": "DISPATCHED", "release_count": 1, "events": ["TokenSpent"]}
+    },
+    {
+      "id": "TV-L--26",
+      "name": "Expiry endpoint rejected",
+      "input": {"op": "dispatch", "token": "$TOKEN", "channel_id": "$P", "action": "$ACT", "now_us": "1000000", "run_state": "RUNNING", "token_state": "ISSUED"},
+      "expected": {"error": "TOKEN_EXPIRED", "release_count": 0}
+    },
+    {
+      "id": "TV-L--27",
+      "name": "Child channel cannot steal token",
+      "input": {"op": "dispatch", "token": "$TOKEN", "channel_id": "lwp_000000000000000000002", "action": "$ACT", "now_us": "1", "run_state": "RUNNING", "token_state": "ISSUED"},
+      "expected": {"error": "TOKEN_BINDING", "release_count": 0}
+    },
+    {
+      "id": "TV-L--28",
+      "name": "Action substitution denied",
+      "input": {"op": "dispatch", "token": "$TOKEN", "channel_id": "$P", "action": {"kind": "spawn", "exec": {"argv": ["/usr/bin/false"], "cwd": "/work", "env": {}}}, "now_us": "1", "run_state": "RUNNING", "token_state": "ISSUED"},
+      "expected": {"error": "TOKEN_BINDING", "release_count": 0}
+    },
+    {
+      "id": "TV-L--29",
+      "name": "New request ID cannot reuse spent token",
+      "input": {"op": "dispatch", "token": "$TOKEN", "channel_id": "$P", "action": "$ACT", "now_us": "1", "run_state": "RUNNING", "token_state": "SPENT"},
+      "expected": {"error": "TOKEN_USED", "release_count": 0}
+    },
+    {
+      "id": "TV-L--30",
+      "name": "Exact transport retry",
+      "input": {"op": "idempotency", "stored_id": "$Q", "stored_digest": "$Z", "incoming_id": "$Q", "incoming_digest": "$Z", "stored_reply": {"action_id": "$A", "state": "DISPATCHED"}},
+      "expected": {"reply": {"action_id": "$A", "state": "DISPATCHED"}, "additional_release_count": 0}
+    },
+    {
+      "id": "TV-L--31",
+      "name": "Ambiguous crash does not redispatch",
+      "input": {"op": "recovery", "action_state": "DISPATCHED", "result_recorded": false, "boot_matches": true, "cgroup_matches": true},
+      "expected": {"action_state": "UNKNOWN", "release_count": 0, "kill_requested": true}
+    },
+    {
+      "id": "TV-L--32",
+      "name": "Stop wins dispatch barrier",
+      "input": {"op": "race", "initial": "RUNNING", "ordered_operations": ["stop", "dispatch"]},
+      "expected": {"state": "STOPPING", "dispatch_error": "STOPPED", "release_count": 0}
+    },
+    {
+      "id": "TV-L--33",
+      "name": "Last-capacity race",
+      "input": {"op": "race", "cap": "11440", "used": "0", "charges": ["11440", "11440"], "order": [0, 1]},
+      "expected": {"admitted": [true, false], "used": "11440", "state": "STOPPING"}
+    },
+    {
+      "id": "TV-L--34",
+      "name": "Kill not confirmed",
+      "input": {"op": "contain", "state": "STOPPING", "kill_deadline_us": "250000", "elapsed_us": "250000", "populated": 1, "effects_closed": true},
+      "expected": {"state": "UNCONFIRMED", "cli_exit": 70, "receipt_completeness": "PREFIX", "continue_kill_attempts": true}
+    },
+    {
+      "id": "TV-L--35",
+      "name": "Raw process clone blocked",
+      "input": {"op": "sandbox", "syscall": "fork", "spawns": 5, "privileged": false},
+      "expected": {"errno": "EPERM", "new_processes": 0, "spawn_tokens_issued": 0}
+    },
+    {
+      "id": "TV-L--36",
+      "name": "Threads count against pids controller",
+      "input": {"op": "sandbox", "syscall": "clone_thread", "pids_current": 64, "pids_max": 64},
+      "expected": {"errno": "EAGAIN", "new_threads": 0, "spawn_tokens_issued": 0}
+    },
+    {
+      "id": "TV-L--37",
+      "name": "Detached group still killed",
+      "input": {"op": "contain", "owned_processes": [{"id": 101, "pgid": 101}, {"id": 102, "pgid": 102}], "operation": "cgroup.kill", "kernel_tasks_killable": true},
+      "expected": {"surviving_owned_processes": [], "populated": 0}
+    },
+    {
+      "id": "TV-L--38",
+      "name": "No migration capability",
+      "input": {"op": "sandbox", "operation": "open", "path": "/sys/fs/cgroup/cgroup.procs", "flags": "write"},
+      "expected": {"errno": "ENOENT", "cgroup_changed": false}
+    },
+    {
+      "id": "TV-L--39",
+      "name": "Recycled PID never signaled",
+      "input": {"op": "contain", "recorded_pid": 101, "recorded_start": "100", "current_start": "200", "pidfd_available": false, "cgroup_identity_matches": false},
+      "expected": {"error": "CONTAINMENT_FAULT", "signals_sent": 0}
+    },
+    {
+      "id": "TV-L--40",
+      "name": "Workload cannot kill supervisor",
+      "input": {"op": "sandbox", "operation": "signal_host_supervisor", "task_uid": 62000, "supervisor_uid": 0, "cap_kill": false, "host_pid_visible": false},
+      "expected": {"errno": "ESRCH", "supervisor_alive": true}
+    },
+    {
+      "id": "TV-L--41",
+      "name": "Loss of either monitor helper",
+      "input": {"op": "contain", "cases": ["supervisor_eof", "guardian_eof", "client_lifetime_eof"], "kernel_tasks_killable": true},
+      "expected": {"kill_requested": [true, true, true], "workload_survivors": [0, 0, 0]}
+    },
+    {
+      "id": "TV-L--42",
+      "name": "Disk failure cannot postpone kill",
+      "input": {"op": "contain", "journal_write": "ENOSPC", "emergency_write": "ENOSPC", "workload_running": true},
+      "expected": {"kill_requested": true, "new_dispatches": 0, "receipt_completeness": "PREFIX", "cli_exit": 70}
+    },
+    {
+      "id": "TV-L--43",
+      "name": "Direct network socket denied",
+      "input": {"op": "sandbox", "operation": "socket", "family": "AF_INET", "type": "SOCK_STREAM", "spawns": 100},
+      "expected": {"errno": "EPERM", "outbound_connections": 0, "spawn_tokens_issued": 0}
+    },
+    {
+      "id": "TV-L--44",
+      "name": "Pinned HTTP rejects loopback",
+      "input": {"op": "network", "origin": "https://example.com", "path": "/status", "pinned_ips": ["127.0.0.1"]},
+      "expected": {"error": "ACTION_DENIED", "connections": 0}
+    },
+    {
+      "id": "TV-L--45",
+      "name": "Redirect does not create a second attempt",
+      "input": {"op": "network", "response_status": 302, "location": "https://example.com/next", "tokens_spent": 1},
+      "expected": {"returned_status": 302, "connections": 1, "redirects_followed": 0, "tokens_spent": 1}
+    },
+    {
+      "id": "TV-L--46",
+      "name": "Remote effect survives local stop",
+      "input": {"op": "network", "request_bytes_sent": 100, "stop_latched": true, "remote_effect_reported_complete": false},
+      "expected": {"action_state": "UNKNOWN", "local_socket_closed": true, "remote_rollback_claimed": false}
+    },
+    {
+      "id": "TV-L--47",
+      "name": "GPU device inaccessible",
+      "input": {"op": "sandbox", "operation": "open", "path": "/dev/nvidia0", "flags": "read_write"},
+      "expected": {"errno": "ENOENT", "accelerator_handles": 0}
+    },
+    {
+      "id": "TV-L--48",
+      "name": "Wall clock cannot extend run",
+      "input": {"op": "contain", "boottime_elapsed_us": "1000", "max_wall_us": "1000", "wall_clock_adjustment_us": "-1000000000"},
+      "expected": {"state": "STOPPING", "reason": "WALL_CAP"}
+    },
+    {
+      "id": "TV-L--49",
+      "name": "Unreported arithmetic is not measured FLOPs",
+      "input": {"op": "attribution", "compute_reservations": [], "observed_package_energy_uj": "500000", "native_work_reported": false},
+      "expected": {"charged_flops": "0", "energy_uj": "500000", "flops_coverage": "cooperative_estimate", "physical_flops_claimed": false}
+    },
+    {
+      "id": "TV-L--50",
+      "name": "Envelope overrun fails closed",
+      "input": {"op": "finish", "reservation": "$RES", "observed_output_tokens": "4", "model": "$M"},
+      "expected": {"error": "ENVELOPE_EXCEEDED", "charged_flops": "11440", "state": "STOPPING", "reason": "FLOPS_CAP"}
+    },
+    {
+      "id": "TV-L--51",
+      "name": "Canonical golden hash",
+      "input": {"op": "verify", "operation": "hash", "body": "$E1.body"},
+      "expected": {"hash": "8289323c2e35432dd855b87a9e38b9890d74b9b476c439e19d48cfb55a499c1f"}
+    },
+    {
+      "id": "TV-L--52",
+      "name": "Valid complete signed chain",
+      "input": {"op": "verify", "entries": ["$E1", "$E2"], "pins": [{"key_id": "$K", "public_key": "$PUB"}], "expected_head": {"seq": "2", "hash": "$H2"}, "require_complete": true},
+      "expected": {"integrity": "VALID", "completeness": "COMPLETE", "state": "REJECTED", "physical_truth": "NOT_ATTESTED"}
+    },
+    {
+      "id": "TV-L--53",
+      "name": "Changed event payload",
+      "input": {"op": "verify", "entries": ["$E1", "$E2"], "mutate": {"entry": 1, "path": "body.data.code", "value": "AUDIT_FAULT"}, "pins": [{"key_id": "$K", "public_key": "$PUB"}]},
+      "expected": {"error": "HASH_MISMATCH"}
+    },
+    {
+      "id": "TV-L--54",
+      "name": "Tail deletion with independently pinned head",
+      "input": {"op": "verify", "entries": ["$E1"], "pins": [{"key_id": "$K", "public_key": "$PUB"}], "expected_head": {"seq": "2", "hash": "$H2"}, "require_complete": false},
+      "expected": {"error": "CHAIN_INVALID"}
+    },
+    {
+      "id": "TV-L--55",
+      "name": "Unsupplied trust root",
+      "input": {"op": "verify", "entries": ["$E1", "$E2"], "pins": []},
+      "expected": {"error": "UNTRUSTED_KEY"}
+    },
+    {
+      "id": "TV-L--56",
+      "name": "Complete requirement rejects valid prefix",
+      "input": {"op": "verify", "entries": ["$E1"], "pins": [{"key_id": "$K", "public_key": "$PUB"}], "expected_head": null, "require_complete": true},
+      "expected": {"error": "INCOMPLETE"}
+    },
+    {
+      "id": "TV-L--57",
+      "name": "Public audit does not contain command secrets",
+      "input": {"op": "redact", "exec": {"argv": ["/usr/bin/job", "secret-value"], "cwd": "/work", "env": {"API_KEY": "test-only-secret"}}, "error": "ACTION_FAILED"},
+      "expected": {"public_error": {"code": "ACTION_FAILED", "retryable": false}, "contains_argv": false, "contains_env": false}
+    },
+    {
+      "id": "TV-L--58",
+      "name": "Changed catalog artifact rejected",
+      "input": {"op": "validate_config", "configured_artifact_hash": "$Z", "actual_artifact_hash": "0587b9faaf456ac6b84a092d6c73261269f82ce2b40bf972d7f0e0fba671b3dd"},
+      "expected": {"error": "INVALID_INPUT", "workload_exec_count": 0}
+    },
+    {
+      "id": "TV-L--59",
+      "name": "Oversized request frame",
+      "input": {"op": "sandbox", "operation": "read_request_frame", "declared_bytes": 65537, "available_bytes": 0},
+      "expected": {"connection_closed": true, "payload_allocated_bytes": 0, "effects_released": 0}
+    },
+    {
+      "id": "TV-L--60",
+      "name": "Reboot cannot resume a budget",
+      "input": {"op": "recovery", "persisted_state": "RUNNING", "boot_matches": false, "charged_flops": "11440", "spawn_tokens_issued": 1},
+      "expected": {"error": "INCOMPLETE", "resumed": false, "charged_flops": "11440", "spawn_tokens_issued": 1, "new_tokens_issued": 0}
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# Spec and process documents are never tracked in this repository.
+SPEC*.md
+*SPEC*.md
+*EXTREME*.md
+PROMPT*.md
+*_PROMPT*
+REVIEW*.md
+FIX_PROMPT*
+SELFREVIEW*
+DRAFT*
+REPORT.md
+INTERFACES.md
+STATUS*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+
+# Node
+node_modules/
+dist/
+
+# Editor/OS
+.DS_Store
+*.swp
