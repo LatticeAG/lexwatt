@@ -24,6 +24,7 @@ from .config import (
 from .core import RunCore
 from .errors import (
     CONTROL_METHODS,
+    FAULT_REASONS,
     PURE_METHODS,
     TERMINAL_STATES,
     WORKLOAD_METHODS,
@@ -334,6 +335,15 @@ class Run:
             # STOPPING, not a premature REJECTED (spec §5.1)
             if self.ctx.cgroup is not None and not self._bootstrap_clean():
                 self._fault("CONTAINMENT_FAULT")
+            elif self.core.state == "RUNNING":
+                # RunStarted already committed: reject() is a no-op once
+                # the run is RUNNING, so without this the arming failure
+                # would be swallowed and the run would coast to WALL_CAP
+                # with no workload. Fault the run so it stops honestly.
+                self._cleanup_arming()
+                self._fault(
+                    e.code if e.code in FAULT_REASONS else "CONTAINMENT_FAULT"
+                )
             else:
                 self._cleanup_arming()
                 self.reject(e.code)
@@ -346,15 +356,23 @@ class Run:
             return False
 
     def _cleanup_arming(self) -> None:
+        # every step is best-effort: a cleanup error must never mask the
+        # arming failure it is unwinding
         if self.ctx.cgroup is not None:
             try:
                 self.host.cgroup_kill(self.ctx.cgroup)
             except Exception:
                 pass
         if self.ctx.workspace_path:
-            self.host.workspace_release(self.ctx.workspace_path, self.run_id)
+            try:
+                self.host.workspace_release(self.ctx.workspace_path, self.run_id)
+            except Exception:
+                pass
         if self.ctx.task_uid is not None:
-            self.host.task_uid_free(self.ctx.task_uid)
+            try:
+                self.host.task_uid_free(self.ctx.task_uid)
+            except Exception:
+                pass
 
     def _write_manifest(self) -> None:
         """launch-manifest.json (spec §10.1): closed JSON; digests use

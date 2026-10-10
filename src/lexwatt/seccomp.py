@@ -59,7 +59,9 @@ X86_64_SYSCALLS = {
     "setpgid": 109, "getppid": 110, "setsid": 112, "getgroups": 115,
     "getpgid": 121, "getsid": 124, "rt_sigpending": 127, "rt_sigtimedwait": 128,
     "rt_sigsuspend": 130, "sigaltstack": 131, "utime": 132, "mknod": 133,
-    "statfs": 137, "personality": 135, "prctl": 157, "arch_prctl": 158,
+    "statfs": 137, "personality": 135, "sched_getparam": 143,
+    "sched_getscheduler": 145, "sched_get_priority_max": 146,
+    "sched_get_priority_min": 147, "prctl": 157, "arch_prctl": 158,
     "setrlimit": 160, "gettid": 186, "tkill": 200, "time": 201, "futex": 202,
     "sched_setaffinity": 203, "sched_getaffinity": 204, "epoll_create": 213,
     "getdents64": 217, "set_tid_address": 218, "restart_syscall": 219,
@@ -128,6 +130,11 @@ def build_filter() -> bytes:
     prog.append(b"")  # JEQ REQUIRED -> ALLOW else EPERM
     allow_idx = len(prog)
     prog.append(_ret(SECCOMP_RET_ALLOW))
+    # cBPF conditional jumps are forward-only (8-bit offsets); the clone
+    # check's deny branches need their own EPERM return after allow_idx —
+    # jumping back to deny_idx is out of range.
+    deny_clone_idx = len(prog)
+    prog.append(_ret(SECCOMP_RET_ERRNO | EPERM))
 
     def fwd(src: int, dst: int) -> int:
         d = dst - src - 1
@@ -144,10 +151,10 @@ def build_filter() -> bytes:
         BPF_JMP_JEQ, X86_64_SYSCALLS["clone3"], fwd(clone3_idx, enosys_idx), 0
     )
     prog[jset_idx] = _jump(
-        BPF_JMP_JSET, (~CLONE_ALLOWED_MASK) & 0xFFFFFFFF, fwd(jset_idx, deny_idx), 0
+        BPF_JMP_JSET, (~CLONE_ALLOWED_MASK) & 0xFFFFFFFF, fwd(jset_idx, deny_clone_idx), 0
     )
     prog[jeq_idx] = _jump(
-        BPF_JMP_JEQ, CLONE_REQUIRED, fwd(jeq_idx, allow_idx), fwd(jeq_idx, deny_idx)
+        BPF_JMP_JEQ, CLONE_REQUIRED, fwd(jeq_idx, allow_idx), fwd(jeq_idx, deny_clone_idx)
     )
     return b"".join(prog)
 
