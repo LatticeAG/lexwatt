@@ -12,7 +12,7 @@
     "ts/src"
   ],
   "scripts": {
-    "test": "node --test ts/test/",
+    "test": "node --test 'ts/test/*.test.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

@@ -149,6 +149,9 @@ class LinuxProc:
     channel_id: str
     alive: bool = True
     exit: dict | None = None
+    # supervisor end of the workload's fd-3 broker channel (socketpair);
+    # kept open on the proc so the workload end never sees a closed peer
+    channel_sock: socket.socket | None = None
 
     def poll(self) -> dict | None:
         if not self.alive:
@@ -304,7 +307,7 @@ class LinuxHost:
         self._workspace_locks[path] = fd
         return fd
 
-    def workspace_release(self, path: str) -> None:
+    def workspace_release(self, path: str, run_id: str) -> None:
         fd = self._workspace_locks.pop(path, None)
         if fd is not None:
             try:
@@ -384,13 +387,13 @@ class LinuxHost:
 
     # -- workload spawn -----------------------------------------------------------------
 
-    def spawn_root(self, run_ctx, execv: dict, channel_sock) -> LinuxProc:
-        return self._spawn(run_ctx, execv, channel_sock)
+    def spawn_root(self, run_ctx, execv: dict, channel_id: str) -> LinuxProc:
+        return self._spawn(run_ctx, execv, channel_id)
 
-    def spawn_child(self, run_ctx, execv: dict, channel_sock) -> LinuxProc:
-        return self._spawn(run_ctx, execv, channel_sock)
+    def spawn_child(self, run_ctx, execv: dict, channel_id: str) -> LinuxProc:
+        return self._spawn(run_ctx, execv, channel_id)
 
-    def _spawn(self, run_ctx, execv: dict, channel_sock) -> LinuxProc:
+    def _spawn(self, run_ctx, execv: dict, channel_id: str) -> LinuxProc:
         """Containment launch: private namespaces + cgroup + task UID +
         no_new_privs + pinned seccomp + exec barrier.
 
@@ -401,16 +404,27 @@ class LinuxHost:
         """
         from .. import seccomp
 
-        err_r, err_w = os.pipe()
+        # CLOEXEC on the write end: a successful execve closes it, so EOF on
+        # the parent's read means the workload execed; a payload means a
+        # pre-exec failure (reported as ACTION_FAILED).
+        err_r, err_w = os.pipe2(os.O_CLOEXEC)
+        # fd-3 broker channel: the child end is dup2'd to descriptor 3 inside
+        # the sandbox; the supervisor end stays with the returned proc.
+        sup_sock, child_sock = socket.socketpair()
         pid = os.fork()
         if pid == 0:
             try:
                 os.close(err_r)
+                sup_sock.close()
                 _unshare(CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID | CLONE_NEWNET)
                 # second fork: enters the new PID namespace
                 child = os.fork()
                 if child != 0:
-                    # namespace reaper: adopt + reap, forward cgroup kill scope
+                    # namespace reaper: adopt + reap, forward cgroup kill
+                    # scope.  Close the error pipe and channel so EOF reaches
+                    # the supervisor at exec, not at workload exit.
+                    os.close(err_w)
+                    child_sock.close()
                     os._exit(self._reap(child))
                 # workload: join cgroup, drop privileges, exec
                 _write(
@@ -424,13 +438,16 @@ class LinuxHost:
                 env = dict(execv["env"])
                 env.setdefault("LANG", "C.UTF-8")
                 # descriptor 3 is the broker channel
-                if channel_sock is not None:
-                    if channel_sock.fileno() != 3:
-                        os.dup2(channel_sock.fileno(), 3)
-                    channel_sock.close()
-                # close everything else
-                keep = {0, 1, 2, 3}
+                if child_sock.fileno() != 3:
+                    os.dup2(child_sock.fileno(), 3)
+                child_sock.close()
+                # close everything else; keep the error-report pipe open so
+                # post-sweep failures (rlimit, seccomp, execve) still reach
+                # the supervisor — it closes itself on a successful exec.
+                keep = {0, 1, 2, 3, err_w}
                 for fd in range(4, 1024):
+                    if fd in keep:
+                        continue
                     try:
                         os.close(fd)
                     except OSError:
@@ -445,6 +462,7 @@ class LinuxHost:
                     os.write(err_w, repr(e).encode()[:4000])
                 finally:
                     os._exit(127)
+        child_sock.close()
         os.close(err_w)
         msg = os.read(err_r, 4000)
         os.close(err_r)
@@ -459,7 +477,9 @@ class LinuxHost:
             pidfd = os.pidfd_open(pid) if hasattr(os, "pidfd_open") else -1
         except OSError:
             pidfd = -1
-        proc = LinuxProc(pid=pid, pgid=pid, pidfd=pidfd, channel_id="")
+        proc = LinuxProc(
+            pid=pid, pgid=pid, pidfd=pidfd, channel_id=channel_id, channel_sock=sup_sock
+        )
         run_ctx.cgroup.procs.append(proc)
         return proc
 
