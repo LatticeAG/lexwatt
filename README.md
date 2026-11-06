@@ -55,6 +55,16 @@ No backend. No HTTP listener. No login, no telemetry, no hosted key service.
 pip install .            # Python package, provides `agent-cap`
 ```
 
+If a user installation puts `agent-cap` outside your `PATH`, add the user
+script directory (usually `~/.local/bin` on Linux):
+
+```sh
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
+```
+
+For a virtual environment, activate it to put its `bin` directory on `PATH`.
+Alternatively, invoke the installed package with `python3 -m lexwatt`.
+
 Requirements: Linux, Python ≥ 3.12, root for enforced profiles.
 The TypeScript pure functions and SDK live under `ts/` and run natively on
 Node ≥ 22.6 (`npm test`).
