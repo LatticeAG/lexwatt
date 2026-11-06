@@ -1,0 +1,12 @@
+[
+  {
+    "id": "dense-small",
+    "kind": "dense-v1",
+    "parameters": "1000",
+    "layers": 1,
+    "hidden": 10,
+    "tokenizer_hash": "d79684d992c6150eea853d790cdef25f804d994cfe3a9198a5b012132dc46ec6",
+    "artifact_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "safety_milli": 1100
+  }
+]

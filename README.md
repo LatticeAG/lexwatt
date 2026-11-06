@@ -63,11 +63,16 @@ Node ≥ 22.6 (`npm test`).
 
 ```sh
 agent-cap doctor --json
-agent-cap estimate --model-file models.json --model dense-small \
+agent-cap estimate --model-file examples/models.json --model dense-small \
     --input-tokens 512 --output-tokens 256 --json
 agent-cap run --config run.json --receipt receipt.json -- /opt/work/job.py
 agent-cap verify receipt.json --key lwk_…=<public-key> --json
 ```
+
+The estimate example uses a fictional model in `examples/models.json`. The
+`--model-file` argument is a JSON array of model catalog entries, not the
+model-ID-to-file-path map configured via `LEXWATT_MODEL_MAP` for `run`. Replace
+the example dimensions and hashes with those of your own model for useful estimates.
 
 ## Wire protocol in one paragraph
 
