@@ -69,6 +69,11 @@ agent-cap run --config run.json --receipt receipt.json -- /opt/work/job.py
 agent-cap verify receipt.json --key lwk_…=<public-key> --json
 ```
 
+On a cloud VM without the required cgroup access or RAPL sensors, `doctor` can
+exit 65 and report `UNSUPPORTED_PROFILE` or `SENSOR_UNAVAILABLE`; `run` then
+cannot enforce the profile and fails closed. Use a supported Linux host for an
+enforced run. Estimates and the simulated-host Python tests do not require RAPL.
+
 The estimate example uses a fictional model in `examples/models.json`. The
 `--model-file` argument is a JSON array of model catalog entries, not the
 model-ID-to-file-path map configured via `LEXWATT_MODEL_MAP` for `run`. Replace
