@@ -55,6 +55,16 @@ No backend. No HTTP listener. No login, no telemetry, no hosted key service.
 pip install .            # Python package, provides `agent-cap`
 ```
 
+If a user installation puts `agent-cap` outside your `PATH`, add the user
+script directory (usually `~/.local/bin` on Linux):
+
+```sh
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
+```
+
+For a virtual environment, activate it to put its `bin` directory on `PATH`.
+Alternatively, invoke the installed package with `python3 -m lexwatt`.
+
 Requirements: Linux, Python ≥ 3.12, root for enforced profiles.
 The TypeScript pure functions and SDK live under `ts/` and run natively on
 Node ≥ 22.6 (`npm test`).
@@ -63,11 +73,21 @@ Node ≥ 22.6 (`npm test`).
 
 ```sh
 agent-cap doctor --json
-agent-cap estimate --model-file models.json --model dense-small \
+agent-cap estimate --model-file examples/models.json --model dense-small \
     --input-tokens 512 --output-tokens 256 --json
 agent-cap run --config run.json --receipt receipt.json -- /opt/work/job.py
 agent-cap verify receipt.json --key lwk_…=<public-key> --json
 ```
+
+On a cloud VM without the required cgroup access or RAPL sensors, `doctor` can
+exit 65 and report `UNSUPPORTED_PROFILE` or `SENSOR_UNAVAILABLE`; `run` then
+cannot enforce the profile and fails closed. Use a supported Linux host for an
+enforced run. Estimates and the simulated-host Python tests do not require RAPL.
+
+The estimate example uses a fictional model in `examples/models.json`. The
+`--model-file` argument is a JSON array of model catalog entries, not the
+model-ID-to-file-path map configured via `LEXWATT_MODEL_MAP` for `run`. Replace
+the example dimensions and hashes with those of your own model for useful estimates.
 
 ## Wire protocol in one paragraph
 
